@@ -170,6 +170,68 @@ $ sudo chmod g+rx /var/www/<your_domain>
 $ sudo chmod o+rx /var/www/<your_domain>
 ```
 
+to add default html file.
+```bash
+$ vim /var/www/<your_domain>/html/index.html
+```
+and add following html file.(you can add angular html file here)   
+```html
+<html>
+    <head>
+        <title>Welcome to your_domain!</title>
+    </head>
+    <body>
+        <h1>Success!  The your_domain server block is working!</h1>
+    </body>
+</html>
+```
+
+to config nginx file at /etc/nginx/sites-available/<your_domain>
+default: Will respond to any requests on port 80 that do not match the other two blocks.    
+
+```shell
+server {
+        listen 80;
+        listen [::]:80;
+
+        root /var/www/your_domain/html;
+        index index.html index.htm index.nginx-debian.html;
+
+        server_name your_domain www.your_domain;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+}
+```
+
+to copy site available to enable
+```bash
+$ sudo ln -s /etc/nginx/sites-available/your_domain /etc/nginx/sites-enabled/
+```
+
+to avoid "bucket memory problem" when adding additional server names.
+```bash
+$ sudo vim /etc/nginx/nginx.conf
+
+# remove comment on following file.
+...
+http {
+    ...
+    server_names_hash_bucket_size 64;
+    ...
+}
+...
+```
+
+
+when change some config in nginx
+```bash
+$ sudo nginx -t # to test nginx script
+$ sudo systemctl restart nginx # restart/reload nginx
+```
+
+
 
 
 ## Additional info
