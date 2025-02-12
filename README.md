@@ -13,6 +13,108 @@ to check firewall
 $ sudo ufw app list
 ```
 
+## setup with docker-compose file   
+
+without docker :  
+* Main configuration: /etc/nginx/nginx.conf  
+* Site-specific configurations: /etc/nginx/sites-available/ and /etc/nginx/sites-enabled/  
+with docker :   
+* Configuration files (e.g., nginx.conf) are typically stored in a directory on the host machine and mounted into the container using Docker volumes.
+```bash
+volumes:
+  - ./nginx.conf:/etc/nginx/nginx.conf
+```
+* write configurations on main config file in "http" curly braces.   
+
+> docker-compose.yml  
+```bash
+version: '3.9'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_container
+    ports:
+      - "80:80"      # Maps port 80 on the host to port 80 on the container
+      - "443:443"    # Maps port 443 on the host to port 443 on the container
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro  # Custom Nginx configuration # status or dynamic 
+      - ./html:/usr/share/nginx/html:ro        # Serve static HTML files
+      - ./logs:/var/log/nginx                  # Store logs on the host
+      # - ./default.conf : /etc/nginx/default.conf:ro # only for static html file  
+    restart: unless-stopped
+```
+
+> nginx/html
+```bash
+<h1>Welcome to Nginx running in Docker!</h1>   
+```
+
+> nginx/conf/default.conf (for static file only )
+```bash
+server {
+    listen 80;
+    server_name localhost;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+```
+> nginx/conf/nginx.conf
+```bash
+events {}
+
+http {
+  # Domain 1 - HTTP
+  server {
+    listen 80;
+    server_name domain1.com;
+
+    location / {
+      proxy_pass http://service1:port; # Replace with your backend service
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+  }
+
+  # Domain 1 - HTTPS
+  server {
+    listen 443 ssl;
+    server_name domain1.com;
+
+    ssl_certificate /etc/nginx/certs/domain1/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/domain1/privkey.pem;
+
+    location / {
+      proxy_pass http://service1:port; # Replace with your backend service
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+  }
+
+  # Domain 2 - HTTP
+  server {
+    listen 80;
+    server_name domain2.com;
+
+    location / {
+      proxy_pass http://service2:port; # Replace with your backend service
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+  }
+```
+
 
 ## Ubuntu security
 
