@@ -205,10 +205,20 @@ server {
 }
 ```
 
-to copy site available to enable
+to copy site available to enable  
+ln - Create Link (used to create links between files)   
+-s - Symbolic Link (If the original file is updated, the changes are reflected in the linked file), Flexibility(Easily Enable or Disable Websites Without Deleting Configuration),     
+linking make Better Organization (Easier to Manage Multiple Websites), Flexibility()
 ```bash
 $ sudo ln -s /etc/nginx/sites-available/your_domain /etc/nginx/sites-enabled/
 ```
+| Feature            | Without Symbolic Links (Direct Edits) | With `sites-available/` + `sites-enabled/` |
+|--------------------|--------------------------------------|------------------------------------------|
+| **Organization**   | All configurations mixed in `nginx.conf` | Each site has a separate file |
+| **Flexibility**    | Hard to disable sites | Can enable/disable without deleting |
+| **Testing & Rollback** | Risk of breaking live site | Test changes before enabling |
+| **Safety**        | Risk of accidental deletion | Configuration remains protected |
+
 
 to avoid "bucket memory problem" when adding additional server names.
 ```bash
@@ -231,8 +241,102 @@ $ sudo nginx -t # to test nginx script
 $ sudo systemctl restart nginx # restart/reload nginx
 ```
 
+## Set Up SSL with Let's Encrypt   
+```bash
+# install Certbot
+$ sudo apt install certbot python3-certbot-nginx -y
 
+# Generate an SSL certificate:
+$ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 
+# Auto-renew certificates:
+$ sudo systemctl enable certbot.timer
+
+```
+
+## Rate Limit Requests to Prevent DDoS  
+This helps prevent abuse, DDoS attacks, and excessive API usage.  
+```bash
+http {
+    # Define a shared memory zone named 'api_limit' with a size of 10MB.
+    # Each unique key (e.g., client IP) will store request counters here.
+    # 'api_limit' is a variable for name of zone
+
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+    limit_req_status 429; # response if rate limite exceeded send back to client  
+
+    server {
+        listen 80; # same port app run
+        server_name example.com;
+
+        location /api/ {  # '/' , '/api/' which zone need rate limit 
+            # Apply the rate limit from the 'api_limit' zone.
+            # The burst allows occasional spikes of 20 requests.
+            limit_req zone=api_limit burst=20 nodelay;
+
+            proxy_pass http://backend_api;
+        }
+    }
+}
+```
+if you limit_req zone=ip burst=12 delay=8; and rate=5r/s then   
+Rate = 5 r/s → Up to 5 requests per second are processed immediately.   
+Burst = 12 → Up to 12 additional requests can be queued instead of being rejected.   
+Delay = 8 → The first 8 requests from the burst queue are processed immediately.   
+The remaining 4 requests in the burst (12 - 8) are delayed so that the request rate does not exceed 5r/s.   
+Once the queue is full (12 requests), additional requests are rejected with a 503 error.  
+
+Restrict by IP address 
+```bash
+location /admin {
+    allow 192.168.1.100;
+    deny all;
+}
+```
+
+## Enable HTTP Security Headers   
+```bash
+server {
+    listen 80;
+
+    # 1️⃣ Prevent Clickjacking
+    add_header X-Frame-Options DENY;
+
+    # 2️⃣ Prevent MIME-type sniffing
+    add_header X-Content-Type-Options nosniff;
+
+    # 3️⃣ Enable basic XSS protection
+    add_header X-XSS-Protection "1; mode=block";
+
+    # 4️⃣ Enforce HTTPS (Only applies if HTTPS is enabled)
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";
+
+    # 5️⃣ Define a Content Security Policy (CSP) to prevent malicious script execution
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted-scripts.com";
+
+    location / {
+        proxy_pass http://your_backend_server;
+    }
+}
+
+```
+
+## Limit Allowed Request Methods    
+Why? Prevents unwanted HTTP methods like PUT, DELETE, and TRACE.   
+```bash
+# Add this inside your server block:
+if ($request_method !~ ^(GET|POST|HEAD)$) {
+    return 444;
+}
+```
+
+## Disable Server Tokens (Hide Version Info)   
+Why? Attackers use version info for targeted exploits.
+```bash
+$ sudo nano /etc/nginx/nginx.conf
+$ server_tokens off;
+$ sudo systemctl restart nginx
+```
 
 ## Additional info
 
